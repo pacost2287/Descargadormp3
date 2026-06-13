@@ -161,8 +161,7 @@
     </div>
 
     <script>
-        const API_URL = "https://api.vexdw.com/api/v1/youtube/download";
-
+    <script>
         async function procesarEnlace() {
             const urlInput = document.getElementById('youtubeUrl').value.trim();
             const loader = document.getElementById('loader');
@@ -181,44 +180,60 @@
                 return;
             }
 
+            // Forzamos a que el cargador aparezca sí o sí en la pantalla
             loader.style.display = "block";
+            loader.textContent = "Conectando con el servidor... Extraendo audio puro.";
             previewCard.style.display = "none";
             audioPlayer.src = "";
 
             try {
-                const peticionUrl = `${API_URL}?url=${encodeURIComponent(urlInput)}&format=mp3`;
-                const respuesta = await fetch(peticionUrl);
-                
+                // Usamos la API de Cobalt en su formato plano, que no genera rechazos de seguridad
+                const respuesta = await fetch("https://api.cobalt.tools/api/json", {
+                    method: "POST",
+                    headers: {
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        url: urlInput,
+                        audioFormat: "mp3",
+                        audioOnly: true,
+                        downloadMode: "audio"
+                    })
+                });
+
                 if (!respuesta.ok) {
-                    throw new Error("El servidor no responde adecuadamente.");
+                    throw new Error("El servidor no pudo procesar el enlace.");
                 }
 
                 const datos = await respuesta.json();
 
-                if (datos && (datos.downloadUrl || datos.url)) {
+                if (datos && datos.url) {
                     loader.style.display = "none";
                     previewCard.style.display = "flex";
 
-                    const audioDirectoUrl = datos.downloadUrl || datos.url;
-                    audioPlayer.src = audioDirectoUrl;
-                    videoTitle.textContent = datos.title || "Audio extraído con éxito ✓";
+                    // Inyectamos el audio directo
+                    audioPlayer.src = datos.url;
+                    videoTitle.textContent = "✓ Audio listo para reproducir";
                     
+                    // Miniatura automática con el ID del video
                     const videoId = extraerIdYouTube(urlInput);
                     if (videoId) {
                         videoThumb.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
                     } else {
-                        videoThumb.src = datos.thumbnail || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500";
+                        videoThumb.src = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500";
                     }
 
-                    previewCard.dataset.downloadUrl = audioDirectoUrl;
+                    // Guardamos el link para la descarga directa
+                    previewCard.dataset.downloadUrl = datos.url;
                 } else {
-                    throw new Error("No se encontró el flujo de audio.");
+                    throw new Error("No se recibió una respuesta válida del extractor.");
                 }
 
             } catch (error) {
                 console.error(error);
                 loader.style.display = "none";
-                alert("Aviso: " + error.message);
+                alert("Error de la App: " + error.message + "\n\nIntenta con otro enlace o recarga la página.");
             }
         }
 
@@ -242,6 +257,7 @@
                 alert("Primero debes cargar una canción.");
             }
         }
+    </script>
     </script>
 </body>
 </html>
