@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stream & Downloader</title>
+    <style>
+        :root {
+            --bg-color: #0f0f0f;
+            --card-bg: #1f1f1f;
+            --accent-color: #ff0000;
+            --text-main: #ffffff;
+            --text-muted: #aaaaaa;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        header {
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+            margin-bottom: 25px;
+            padding-top: 10px;
+        }
+
+        header h1 {
+            font-size: 1.6rem;
+            font-weight: 700;
+        }
+
+        header span {
+            color: var(--accent-color);
+        }
+
+        .main-container {
+            width: 100%;
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .input-card {
+            background-color: var(--card-bg);
+            padding: 15px;
+            border-radius: 12px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #333;
+            background-color: #2d2d2d;
+            color: #fff;
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .btn-process {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .preview-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 15px;
+            display: none;
+            flex-direction: column;
+            gap: 15px;
+            text-align: center;
+        }
+
+        .thumbnail {
+            width: 100%;
+            border-radius: 8px;
+            aspect-ratio: 16/9;
+            object-fit: cover;
+            background-color: #333;
+        }
+
+        .video-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 5px;
+        }
+
+        .btn-download {
+            width: 100%;
+            padding: 10px;
+            border-radius: 6px;
+            border: none;
+            font-weight: 600;
+            background-color: #28a745;
+            color: white;
+            cursor: pointer;
+        }
+
+        .loader {
+            display: none;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Pure<span>Music</span> Player</h1>
+    </header>
+
+    <div class="main-container">
+        <div class="input-card">
+            <div class="input-group">
+                <input type="text" id="youtubeUrl" placeholder="Pegá el enlace de YouTube acá..." autocomplete="off">
+                <button class="btn-process" onclick="procesarEnlace()">Cargar Contenido</button>
+            </div>
+        </div>
+
+        <div class="loader" id="loader">Obteniendo audio libre de anuncios...</div>
+
+        <div class="preview-card" id="previewCard">
+            <img src="" alt="Miniatura" class="thumbnail" id="videoThumb">
+            <div class="video-title" id="videoTitle">Música lista</div>
+            <audio id="audioPlayer" controls></audio>
+            <button class="btn-download" onclick="descargarMp3()">Descargar MP3</button>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "https://api.vexdw.com/api/v1/youtube/download";
+
+        async function procesarEnlace() {
+            const urlInput = document.getElementById('youtubeUrl').value.trim();
+            const loader = document.getElementById('loader');
+            const previewCard = document.getElementById('previewCard');
+            const audioPlayer = document.getElementById('audioPlayer');
+            const videoTitle = document.getElementById('videoTitle');
+            const videoThumb = document.getElementById('videoThumb');
+
+            if (urlInput === "") {
+                alert("Por favor, ingresá un enlace de YouTube.");
+                return;
+            }
+
+            if (urlInput.includes("playlist?list=")) {
+                alert("¡Atención! Las playlists completas no están soportadas. Copiá el enlace de una sola canción.");
+                return;
+            }
+
+            loader.style.display = "block";
+            previewCard.style.display = "none";
+            audioPlayer.src = "";
+
+            try {
+                const peticionUrl = `${API_URL}?url=${encodeURIComponent(urlInput)}&format=mp3`;
+                const respuesta = await fetch(peticionUrl);
+                
+                if (!respuesta.ok) {
+                    throw new Error("El servidor no responde adecuadamente.");
+                }
+
+                const datos = await respuesta.json();
+
+                if (datos && (datos.downloadUrl || datos.url)) {
+                    loader.style.display = "none";
+                    previewCard.style.display = "flex";
+
+                    const audioDirectoUrl = datos.downloadUrl || datos.url;
+                    audioPlayer.src = audioDirectoUrl;
+                    videoTitle.textContent = datos.title || "Audio extraído con éxito ✓";
+                    
+                    const videoId = extraerIdYouTube(urlInput);
+                    if (videoId) {
+                        videoThumb.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                    } else {
+                        videoThumb.src = datos.thumbnail || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500";
+                    }
+
+                    previewCard.dataset.downloadUrl = audioDirectoUrl;
+                } else {
+                    throw new Error("No se encontró el flujo de audio.");
+                }
+
+            } catch (error) {
+                console.error(error);
+                loader.style.display = "none";
+                alert("Aviso: " + error.message);
+            }
+        }
+
+        function extraerIdYouTube(url) {
+            const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+            const match = url.match(regExp);
+            return (match && match[2].length === 11) ? match[2] : null;
+        }
+
+        function descargarMp3() {
+            const urlDescarga = document.getElementById('previewCard').dataset.downloadUrl;
+            if (urlDescarga) {
+                const a = document.createElement('a');
+                a.href = urlDescarga;
+                a.download = "musica_pureplayer.mp3";
+                a.target = "_blank";
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } else {
+                alert("Primero debes cargar una canción.");
+            }
+        }
+    </script>
+</body>
+</html>
