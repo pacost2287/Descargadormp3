@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Stream & Downloader</title>
+    <title>PureMusic Player</title>
     <style>
         :root {
             --bg-color: #0f0f0f;
@@ -150,18 +150,21 @@
             </div>
         </div>
 
-        <div class="loader" id="loader">Obteniendo audio libre de anuncios...</div>
+        <div class="loader" id="loader">Procesando audio libre de publicidad...</div>
 
         <div class="preview-card" id="previewCard">
             <img src="" alt="Miniatura" class="thumbnail" id="videoThumb">
-            <div class="video-title" id="videoTitle">Música lista</div>
+            <div class="video-title" id="videoTitle">Cargando datos...</div>
             <audio id="audioPlayer" controls></audio>
             <button class="btn-download" onclick="descargarMp3()">Descargar MP3</button>
         </div>
     </div>
 
     <script>
-    <script>
+        // Cambiamos a la API de yt-download, libre de restricciones CORS para sitios estáticos
+        const API_BASE = "https://api.allorigins.win/get?url=";
+        const TARGET_API = "https://savetube.me/api/v1/single/video";
+
         async function procesarEnlace() {
             const urlInput = document.getElementById('youtubeUrl').value.trim();
             const loader = document.getElementById('loader');
@@ -175,65 +178,56 @@
                 return;
             }
 
-            if (urlInput.includes("playlist?list=")) {
-                alert("¡Atención! Las playlists completas no están soportadas. Copiá el enlace de una sola canción.");
-                return;
-            }
-
-            // Forzamos a que el cargador aparezca sí o sí en la pantalla
             loader.style.display = "block";
-            loader.textContent = "Conectando con el servidor... Extraendo audio puro.";
             previewCard.style.display = "none";
             audioPlayer.src = "";
 
             try {
-                // Usamos la API de Cobalt en su formato plano, que no genera rechazos de seguridad
-                const respuesta = await fetch("https://api.cobalt.tools/api/json", {
-                    method: "POST",
-                    headers: {
-                        "Accept": "application/json",
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        url: urlInput,
-                        audioFormat: "mp3",
-                        audioOnly: true,
-                        downloadMode: "audio"
-                    })
-                });
-
-                if (!respuesta.ok) {
-                    throw new Error("El servidor no pudo procesar el enlace.");
+                // Extraemos el ID del video de forma limpia
+                const videoId = extraerIdYouTube(urlInput);
+                if (!videoId) {
+                    throw new Error("El enlace no parece un video válido de YouTube.");
                 }
 
-                const datos = await respuesta.json();
+                // Seteamos la miniatura rápido para que veas que tu código reacciona al toque
+                videoThumb.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
 
-                if (datos && datos.url) {
+                // Usamos un puente CORS abierto (AllOrigins) para blindar la petición contra bloqueos del navegador móvil
+                const urlFinalTarget = `${TARGET_API}?url=${encodeURIComponent('https://www.youtube.com/watch?v=' + videoId)}`;
+                const respuesta = await fetch(API_BASE + encodeURIComponent(urlFinalTarget));
+                
+                if (!respuesta.ok) {
+                    throw new Error("Error en la respuesta de la red.");
+                }
+
+                const datosSucios = await respuesta.json();
+                // El puente mete la respuesta original dentro de una propiedad 'contents' como texto
+                const datos = JSON.parse(datosSucios.contents);
+
+                if (datos && datos.status === true && datos.data) {
                     loader.style.display = "none";
                     previewCard.style.display = "flex";
 
-                    // Inyectamos el audio directo
-                    audioPlayer.src = datos.url;
-                    videoTitle.textContent = "✓ Audio listo para reproducir";
-                    
-                    // Miniatura automática con el ID del video
-                    const videoId = extraerIdYouTube(urlInput);
-                    if (videoId) {
-                        videoThumb.src = `https://img.youtube.com/vi/${videoId}/mqdefault.jpg`;
+                    // Buscamos los flujos de audio disponibles en la respuesta de la API
+                    const audios = datos.data.audio_formats;
+                    if(audios && audios.length > 0) {
+                        // Agarramos el primer flujo de audio disponible (suele ser el mejor)
+                        const audioUrl = audios[0].url;
+                        
+                        audioPlayer.src = audioUrl;
+                        videoTitle.textContent = datos.data.title || "Audio extraído con éxito ✓";
+                        previewCard.dataset.downloadUrl = audioUrl;
                     } else {
-                        videoThumb.src = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=500";
+                        throw new Error("No se encontraron pistas de audio para este video.");
                     }
-
-                    // Guardamos el link para la descarga directa
-                    previewCard.dataset.downloadUrl = datos.url;
                 } else {
-                    throw new Error("No se recibió una respuesta válida del extractor.");
+                    throw new Error("El servidor de conversión no reconoce el video o está saturado.");
                 }
 
             } catch (error) {
                 console.error(error);
                 loader.style.display = "none";
-                alert("Error de la App: " + error.message + "\n\nIntenta con otro enlace o recarga la página.");
+                alert("Falla de la App: " + error.message);
             }
         }
 
@@ -246,18 +240,11 @@
         function descargarMp3() {
             const urlDescarga = document.getElementById('previewCard').dataset.downloadUrl;
             if (urlDescarga) {
-                const a = document.createElement('a');
-                a.href = urlDescarga;
-                a.download = "musica_pureplayer.mp3";
-                a.target = "_blank";
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
+                window.open(urlDescarga, '_blank');
             } else {
-                alert("Primero debes cargar una canción.");
+                alert("No hay ningún archivo cargado para descargar.");
             }
         }
-    </script>
     </script>
 </body>
 </html>
